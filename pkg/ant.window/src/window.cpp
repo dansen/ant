@@ -48,7 +48,12 @@ static void push_message_arg(lua_State* L, float v) {
 }
 
 static void push_message_arg(lua_State* L, void* v) {
-	lua_pushlightuserdata(L, v);
+	if (v) {
+		lua_pushlightuserdata(L, v);
+	}
+	else {
+		lua_pushnil(L);
+	}
 }
 
 static void push_message_arg(lua_State* L, ant::window::touch_state v) {
@@ -214,22 +219,24 @@ static void push_message(lua_State* L, Args&&... args) {
 	MessageFetch(L);
 }
 
-void window_message_init(lua_State* L, void* window, void* nwh, void* context, int w, int h) {
+void window_message_init(lua_State* L, void* window, void* nwh, void* ndt, void *context, int w, int h) {
 	push_message(L,
 		"type", "init",
 		"window", window,
 		"nwh", nwh,
+		"ndt", ndt,
 		"context", context,
 		"w", w,
 		"h", h
 	);
 }
 
-void window_message_recreate(lua_State* L, void* window, void* nwh, void* context, int w, int h) {
+void window_message_recreate(lua_State* L, void* window, void* nwh, void* ndt, void *context, int w, int h) {
 	push_message(L,
 		"type", "recreate",
 		"window", window,
 		"nwh", nwh,
+		"ndt", ndt,
 		"context", context,
 		"w", w,
 		"h", h

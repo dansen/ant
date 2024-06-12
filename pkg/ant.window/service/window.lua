@@ -27,34 +27,29 @@ local function reboot(args)
 end
 
 local function render(init, args, initialized)
-    local config = {
-        ecs = args,
-        window = init.window,
-        nwh = init.nwh,
-        context = init.context,
-        width = init.w,
-        height = init.h,
-    }
     rhwi.init {
-        window  = config.window,
-        nwh     = config.nwh,
-        context = config.context,
-        w       = config.width,
-        h       = config.height,
+        nwh     = init.nwh,
+        ndt     = init.ndt,
+        context = init.context,
+        width   = init.w,
+        height  = init.h,
     }
+    rhwi.set_native_window(init.window)
     rhwi.set_profie(false)
     bgfx.encoder_create "world"
     bgfx.encoder_init()
     assetmgr.init()
     bgfx.encoder_begin()
-    world = new_world(config)
+    world = new_world {
+        ecs    = args,
+        width  = init.w,
+        height = init.h,
+    }
     world:dispatch_message {
-        type = "set_viewport",
-        viewport = {
-            x = 0,
-            y = 0,
-            w = config.width,
-            h = config.height,
+        type = "window_init",
+        size = {
+            w = init.w,
+            h = init.h,
         },
     }
     world:dispatch_message { type = "update" }
@@ -98,7 +93,9 @@ end
 
 function WindowEvent.recreate(m)
     bgfx.set_platform_data {
-        nwh = m.nwh
+        nwh = m.nwh,
+        ndt = m.ndt,
+        context = m.context,
     }
     world:dispatch_message {
         type = "size",
@@ -184,12 +181,29 @@ function S.set_cursor(cursor)
     window.set_cursor(cursor)
 end
 
+function S.show_cursor(show)
+    window.show_cursor(show)
+end
+
 function S.set_title(title)
     window.set_title(title)
 end
 
 function S.set_maxfps(fps)
     window.set_maxfps(fps)
+end
+
+function S.set_fullscreen(fullscreen)
+    window.set_fullscreen(fullscreen)
+end
+
+function S.get_cmd()
+	return initargs.cmd
+end
+
+if initargs.log then
+	-- set log level : 'trace','debug', 'info', 'warn', 'error', 'fatal'
+	log.level = initargs.log
 end
 
 window.init(WindowQueue, initargs.window_size)

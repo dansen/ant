@@ -6,11 +6,11 @@ local L                 = import_package "ant.render.core".layout
 local depends           = require "depends"
 local gltfutil          = require "model.glTF.util"
 local parallel_task     = require "parallel_task"
+local build_animation   = require "model.build_animation"
 
 local function create_entity(t, prefabs)
-    if t.parent then
-        t.mount = t.parent
-        t.data.scene = t.data.scene or {}
+    if t.mount and next(t.mount) == nil then
+        t.mount = nil
     end
     table.sort(t.policy)
     prefabs[#prefabs+1] = {
@@ -57,7 +57,9 @@ local function duplicate_table(m)
     return t
 end
 
-local check_update_material_info; do
+
+
+local check_refine_material; do
     local function declname_shortnames(declname)
         local n = {}
         for dn in declname:gmatch "%w+" do
@@ -68,7 +70,7 @@ local check_update_material_info; do
     end
 
     local function build_cfg_name(basename, cfg)
-        return ("%s_%s%s"):format(basename, cfg.pack_tangent_frame, declname_shortnames(cfg.binded_declname))
+        return ("%s_%s%s%s"):format(basename, cfg.no_skinning, cfg.pack_tangent_frame, declname_shortnames(cfg.binded_declname))
     end
 
     local function build_name(filename, cfg)
@@ -77,25 +79,59 @@ local check_update_material_info; do
     end
 
     local build_varyings; do
+        local function check_tbn_varyings(varyings, cfg)
+            if varyings.a_tangent then
+                varyings.v_tangent  = "vec3 TANGENT"
+                if cfg.pack_tangent_frame then
+                    assert(not varyings.a_normal, "Normal should pack to Tangent attirb")
+                    local v = {}
+                    for n in varyings.a_tangent:gmatch "%w+" do
+                        v[#v+1] = n
+                    end
+        
+                    varyings.a_tangent = {
+                        type = v[1],
+                        bind = v[2],
+                        pack_from_quat = true,
+                    }
+    
+                    varyings.v_normal   = "vec3 NORMAL"
+                    varyings.v_bitangent= "vec3 BITANGENT"
+                end
+            end
+
+            if not varyings.v_normal and varyings.a_normal then 
+                if not varyings.a_tangent or type(varyings.a_tangent) == "string" then
+                    varyings.v_normal   = "vec3 NORMAL"
+                end
+            end
+
+            if varyings.a_bitangent then
+                varyings.v_bitangent= "vec3 BITANGENT"
+            end
+
+            local numvarying = 0
+            if varyings.v_normal then
+                numvarying = numvarying + 1
+            end
+
+            if varyings.v_tangent then
+                numvarying = numvarying + 1
+            end
+
+            if varyings.v_bitangent then
+                numvarying = numvarying + 1
+            end
+
+            return numvarying
+        end
+
         function build_varyings(cfg, mat)
             local varyings = L.varying_inputs(cfg.binded_declname)
 
-            if cfg.pack_tangent_frame and varyings.a_tangent then
-                assert(not varyings.a_normal, "Normal should pack to Tangent attirb")
-                local v = {}
-                for n in varyings.a_tangent:gmatch "%w+" do
-                    v[#v+1] = n
-                end
-    
-                varyings.a_tangent = {
-                    type = v[1],
-                    bind = v[2],
-                    pack_from_quat = true,
-                }
-            end
+            local num_varying = check_tbn_varyings(varyings, cfg)
 
             --varying
-            local num_varying = 0
             local function gen_varying(a, v, n)
                 assert(n > 1)
                 for i=0, n-1 do
@@ -114,10 +150,6 @@ local check_update_material_info; do
 
             if mat.fx.setting.lighting == "on" then
                 varyings.v_posWS    = "vec3 TEXCOORD" .. vtex_idx
-                varyings.v_tangent  = "vec3 TANGENT"
-                varyings.v_normal   = "vec3 NORMAL"
-                varyings.v_bitangent= "vec3 BITANGENT"
-
                 num_varying = num_varying + 4
             end
 
@@ -134,48 +166,54 @@ local check_update_material_info; do
         nm.fx.varyings = build_varyings(cfg, nm)
         return nm
     end
-    function check_update_material_info(status, filename, material, cfg)
-        local basename = lfs.path(filename):stem():string()
+
+    function check_refine_material(status, materialtemplate, cfg)
+        local basename = lfs.path(materialtemplate.filename):stem():string()
         local c = status.material_cache[basename]
-        if c == nil then
-            c = {}
-            status.material_cache[basename] = c
-        end
 
-        local name = build_name(filename, cfg)
+        local name = build_name(materialtemplate.filename, cfg)
 
-        local cc = c[name]
-        if nil == cc then
+        local template = c[name]
+        if nil == template then
             -- check next(c) to let the first material file use basename, because most materials with the same basic name have only one
             local fn = ("materials/%s.material"):format(next(c) and name or basename)
-            local mi = build_material(material, cfg)
-            cc = {
-                filename = fn,
-                material = mi,
+            local mi = build_material(materialtemplate.content, cfg)
+            if cfg.no_skinning then
+                mi.fx.setting.no_skinning = true
+                mi.fx.varyings.a_indices = nil
+                mi.fx.varyings.a_weight = nil
+            end
+            template = {
+                filename    = fn,
+                content     = mi,
             }
+            c[name] = template
 
-            c[name] = cc
-            parallel_task.add(status.tasks, function ()
-                material_compile(status.depfiles, cc.material, status.input, status.output / cc.filename, status.setting)
+            utility.apply_patch(status, fn, mi, function (n, mc)
+                status.refine_materials[n] = mc
+                if mc.fx.setting.no_skinning then
+                    mc.fx.varyings.a_indices = nil
+                    mc.fx.varyings.a_weight = nil
+                end
             end)
         end
-        return cc
+
+        return template
     end
 end
 
-local function seri_material(status, filename, cfg)
-    local material_names = status.material_names
-    local stem = lfs.path(filename):stem():string()
+local function refine_material(status, materialtemplate, cfg)
+    if materialtemplate.filename:sub(1, 1) ~= "/" then
+        return check_refine_material(status, materialtemplate, cfg)
+    end
 
-    if filename:sub(1, 1) == "/" then
-        material_names[stem] = stem
-        return filename
-    else
-        local material = assert(status.material[filename])
-        local info = check_update_material_info(status, filename, material, cfg)
-        local newstem = lfs.path(info.filename):stem():string()
-        material_names[newstem] = stem
-        return info.filename
+    return materialtemplate
+end
+
+local function update_material_names(status, mt, rm)
+    local stem = lfs.path(rm.filename):stem():string()
+    if not status.material_names[stem] then
+        status.material_names[stem] = lfs.path(mt.filename):stem():string()
     end
 end
 
@@ -231,31 +269,39 @@ local function create_mesh_node_entity(math3d, gltfscene, parentNodeIndex, nodei
         local mode      = prim.mode or 4
         assert(mode == 4, "Only 'TRIANGLES' primitive mode is supported")
 
-        local materialfile = status.material_idx[prim.material+1] or error(("Invalid prim.material index:%d"):format(prim.material+1))
-        local meshfile = em.meshbinfile or error(("not found meshfile in export data:%d, %d"):format(meshidx+1, primidx))
-
-        status.material_cfg[meshfile] = {
-            pack_tangent_frame      = em.pack_tangent_frame and "P" or "",
-            binded_declname         = mesh_declname(em),
+        local needskinning<const> = node.skin and status.animation
+        local materialcfg = {
+            pack_tangent_frame  = em.pack_tangent_frame and "P" or "",
+            binded_declname     = mesh_declname(em),
         }
+        if not needskinning then
+            materialcfg.no_skinning = "NS"
+        end
+        local materialtemplate = status.material[prim.material+1] or error(("Invalid prim.material index:%d"):format(prim.material+1))
+        local rmaterial = refine_material(status, materialtemplate, materialcfg)
+        update_material_names(status, materialtemplate, rmaterial)
 
-        local materialcontent = status.material[materialfile] or error(("Invalid material file:%s, not found material content"):format(materialfile))
+        local policy = {}
         local data = {
-            mesh            = meshfile,
-            material        = assert(materialfile, "Not found material file"),
-            render_layer    = find_render_layer(materialcontent.state),
+            mesh            = em.meshbinfile or error(("not found meshfile in export data:%d, %d"):format(meshidx+1, primidx)),
+            material        = rmaterial.filename,
+            render_layer    = find_render_layer(rmaterial.content.state),
             visible_masks   = DEFAULT_MASKS,
             visible         = true,
         }
+        local mount = {
+            ["/scene/parent"] = parent,
+        }
 
-        local policy = {}
-
-        if node.skin and status.animation then
+        if needskinning then
             --local jointsMap = GetJointsMap(gltfscene, prim)
             policy[#policy+1] = "ant.render|skinrender"
             policy[#policy+1] = "ant.animation|skinning"
             data.scene = {}
-            data.skinning = node.skin+1
+            data.skinning = {
+                skin = node.skin+1,
+            }
+            mount["/skinning/animation"] = status.animation_id
         else
             policy[#policy+1] = "ant.render|render"
             data.scene    = {s=srt.s,r=srt.r,t=srt.t}
@@ -267,7 +313,7 @@ local function create_mesh_node_entity(math3d, gltfscene, parentNodeIndex, nodei
             local joint_index = status.skeleton:joint_index(parentNode.name)
             if joint_index and (joint_index ~= 1) then
                 policy[#policy+1] = "ant.modifier|modifier"
-                parent = 1
+                mount["/scene/parent"] = 1
                 data.modifier = { parentNode.name }
             end
         end
@@ -275,53 +321,11 @@ local function create_mesh_node_entity(math3d, gltfscene, parentNodeIndex, nodei
         entity = create_entity({
             policy = policy,
             data   = data,
-            parent = parent,
+            mount  = mount,
             tag    = node.name and { node.name } or nil,
         }, prefabs)
     end
     return entity
-end
-
-local function create_node_entity(math3d, gltfscene, nodeidx, parent, status, prefabs)
-    local node = gltfscene.nodes[nodeidx+1]
-    local srt = get_transform(math3d, node)
-    local policy = {
-        "ant.scene|scene_object"
-    }
-    local data = {
-        scene = {s=srt.s,r=srt.r,t=srt.t}
-    }
-    --add_animation(gltfscene, status, nodeidx, policy, data)
-    return create_entity({
-        policy = policy,
-        data = data,
-        parent = parent,
-        tag    = node.name and { node.name } or nil,
-    }, prefabs)
-end
-
-local function create_root_entity(status, prefabs)
-    if not status.animation then
-        return create_entity({
-            policy = {
-                "ant.scene|scene_object",
-            },
-            data = {
-                scene = {},
-            },
-        }, prefabs)
-    else
-        return create_entity({
-            policy = {
-                "ant.animation|animation",
-            },
-            data = {
-                scene = {},
-                animation = "animations/animation.ozz",
-            },
-            tag = {"animation"},
-        }, prefabs)
-    end
 end
 
 local function has_mesh(model, nodeIndex, meshnodes)
@@ -365,12 +369,25 @@ local function serialize_path(path)
     return path
 end
 
+local function add_compile_material_task(status, materialfile)
+    if status.material_tasks[materialfile] then
+        return
+    end
+
+    status.material_tasks[materialfile] = true
+    local materialcontent = assert(status.refine_materials[materialfile], materialfile)
+    parallel_task.add(status.tasks, function ()
+        material_compile(status.depfiles, materialcontent, status.input, status.output / materialfile, status.setting)
+    end)
+end
+
 local function serialize_prefab(status, data)
     for _, v in ipairs(data) do
         local e = v.data
         if e then
             if e.material then
-                e.material = serialize_path(seri_material(status, e.material, status.material_cfg[e.mesh]))
+                add_compile_material_task(status, e.material)
+                e.material = serialize_path(e.material)
             end
             if e.mesh then
                 e.mesh = serialize_path(e.mesh)
@@ -383,120 +400,121 @@ local function serialize_prefab(status, data)
     return data
 end
 
-local function compile_animation(status, skeleton, name, file)
-    if lfs.path(file):extension() ~= ".anim" then
-        return serialize_path(file)
+local function fetch_scene(gltfscene)
+    return gltfscene.scenes[(gltfscene.scene or 0)+1]
+end
+
+local function build_prefabs(status, prefabs, meshnodes, suffix)
+    local math3d    = status.math3d
+    local gltfscene = status.gltfscene
+    local scene     = fetch_scene(gltfscene)
+    local rootid    = create_entity({
+        policy = {
+            "ant.scene|scene_object",
+        },
+        data = {
+            scene = {},
+        },
+    }, prefabs)
+    if status.animation then
+        status.animation_id = create_entity({
+            policy = {
+                "ant.animation|animation",
+            },
+            data = {
+                animation = "animations/animation.ozz",
+            },
+            tag = { "animation" },
+        }, prefabs)
     end
-    local anim2ozz = require "model.anim2ozz"
-    local vfs_fastio = require "vfs_fastio"
-    local fastio = require "fastio"
-    local skecontent = skeleton:sub(1,1) == "/"
-         and vfs_fastio.readall_f(status.setting, skeleton)
-         or fastio.readall_f((status.output / "animations" / skeleton):string())
-    depends.add_vpath(status.depfiles, status.setting, file)
-    anim2ozz(status.setting, skecontent, file, (status.output / "animations" / (name..".bin")):string())
-    return serialize.path(name..".bin")
+    local function ImportNode(parent, nodes, parentNodeIndex)
+        for _, nodeIndex in ipairs(nodes) do
+            if meshnodes[nodeIndex] then
+                local node = gltfscene.nodes[nodeIndex+1]
+                local entity
+                if node.mesh then
+                    entity = create_mesh_node_entity(math3d, gltfscene, parentNodeIndex, nodeIndex, parent, status, prefabs)
+                -- TODO: don't export bone node
+                -- else
+                --     entity = create_node_entity(math3d, gltfscene, nodeIndex, parent, status, prefabs)
+                end
+                if node.children then
+                    ImportNode(entity or parent, node.children, nodeIndex)
+                end
+            end
+        end
+    end
+    ImportNode(rootid, scene.nodes)
+
+    if suffix and (not status.animation) then
+        if not status.animation then
+            for _, e in ipairs(prefabs) do
+                if e and e.data.mesh then
+                    e.policy[#e.policy+1] = "ant.render|draw_indirect"
+                    e.data.draw_indirect = {
+                        instance_buffer = {
+                            flag    = "ra",
+                            layout  = "t45NIf|t46NIf|t47NIf",
+                            num     = 0,
+                            size    = 10,
+                            params  = {},
+                        }
+                    }
+                end
+            end 
+        end
+        for _, patchs in pairs(status.patch) do
+            for _, patch in ipairs(patchs) do
+                local v = patch.value
+                if type(v) == "table" and v.mount and v.prefab then
+                    v.prefab = v.prefab:gsub("(%.[^%.]+)$", "_di%1")
+                end
+            end
+        end
+    end
+
+    utility.save_txt_file(status, "mesh.prefab", prefabs, function (data)
+        return serialize_prefab(status, data)
+    end, suffix)
+
+
+    utility.save_txt_file(status, "translucent.prefab", prefabs, function (data)
+        for _, v in ipairs(data) do
+            local e = v.data
+            if e then
+                if e.material then
+                    e.material = serialize_path "/pkg/ant.resources/materials/translucent.material"
+                end
+            end
+        end
+        return data
+    end, suffix)
+end
+
+local function init_material_data(status)
+    status.material_names = {}
+    status.material_cache = setmetatable({}, {__index=function (t, k) local tt = {}; t[k] = tt; return tt end})
+    status.material_tasks = {}
+    status.refine_materials = {}
+end
+
+local function init_prefab_export(status)
+    status.prefab, status.di_prefab = {}, {}
+    init_material_data(status)
 end
 
 return function (status)
-    local math3d = status.math3d
-    local gltfscene = status.gltfscene
-    local sceneidx = gltfscene.scene or 0
-    local scene = gltfscene.scenes[sceneidx+1]
+    init_prefab_export(status)
 
-    status.prefab = {}
-    status.di_prefab = {}
-    status.material_names = {}
+    local gltfscene = status.gltfscene
+    local scene     = fetch_scene(gltfscene)
 
     local meshnodes = find_mesh_nodes(gltfscene, scene)
-    local function build_prefabs(prefabs, suffix)
-        local rootid = create_root_entity(status, prefabs)
-        local function ImportNode(parent, nodes, parentNodeIndex)
-            for _, nodeIndex in ipairs(nodes) do
-                if meshnodes[nodeIndex] then
-                    local node = gltfscene.nodes[nodeIndex+1]
-                    local entity
-                    if node.mesh then
-                        entity = create_mesh_node_entity(math3d, gltfscene, parentNodeIndex, nodeIndex, parent, status, prefabs)
-                    -- TODO: don't export bone node
-                    -- else
-                    --     entity = create_node_entity(math3d, gltfscene, nodeIndex, parent, status, prefabs)
-                    end
-                    if node.children then
-                        ImportNode(entity or parent, node.children, nodeIndex)
-                    end
-                end
-            end
-        end
-        ImportNode(rootid, scene.nodes)
-
-        if suffix and (not status.animation) then
-            if not status.animation then
-                for _, e in ipairs(prefabs) do
-                    if e and e.data.mesh then
-                        e.policy[#e.policy+1] = "ant.render|draw_indirect"
-                        e.data.draw_indirect = {
-                            instance_buffer = {
-                                flag    = "ra",
-                                layout  = "t45NIf|t46NIf|t47NIf",
-                                num     = 0,
-                                size    = 10,
-                                params  = {},
-                            }
-                        }
-                    end
-                end 
-            end
-            for _, patchs in pairs(status.patch) do
-                for _, patch in ipairs(patchs) do
-                    local v = patch.value
-                    if type(v) == "table" and v.mount and v.prefab then
-                        v.prefab = v.prefab:gsub("(%.[^%.]+)$", "_di%1")
-                    end
-                end
-            end
-        end
-
-        utility.save_txt_file(status, "mesh.prefab", prefabs, function (data)
-            return serialize_prefab(status, data)
-        end, suffix)
-    
-    
-        utility.save_txt_file(status, "translucent.prefab", prefabs, function (data)
-            for _, v in ipairs(data) do
-                local e = v.data
-                if e then
-                    if e.material then
-                        e.material = serialize_path "/pkg/ant.resources/materials/translucent.material"
-                    end
-                end
-            end
-            return data
-        end, suffix)
-    end
-
-    build_prefabs(status.prefab)
-    build_prefabs(status.di_prefab, "di")
+    build_prefabs(status, status.prefab, meshnodes)
+    build_prefabs(status, status.di_prefab, meshnodes, "di")
 
     if status.animation then
-        utility.save_txt_file(status, "animations/animation.ozz", status.animation, function (t)
-            if t.skeleton then
-                if t.animations then
-                    for name, file in pairs(t.animations) do
-                        t.animations[name] = compile_animation(status, t.skeleton, name, file)
-                    end
-                end
-                if t.skins then
-                    for i, file in ipairs(t.skins) do
-                        t.skins[i] = serialize_path(file)
-                    end
-                end
-                t.skeleton = serialize_path(t.skeleton)
-            end
-            return t
-        end)
+        build_animation(status)
     end
-
-
     utility.save_txt_file(status, "materials_names.ant", status.material_names, function (data) return data end)
 end

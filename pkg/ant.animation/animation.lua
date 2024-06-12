@@ -1,18 +1,18 @@
-local ecs = ...
+local ecs   = ...
 local world = ecs.world
-local w = world.w
+local w     = world.w
 
 local assetmgr = import_package "ant.asset"
-local ozz = require "ozz"
 local skinning = ecs.require "skinning"
 
-local m = ecs.system "animation_system"
+local ozz = require "ozz"
+local api = {}
 
-local function create(filename)
+function api.create(filename, obj)
     local data = assetmgr.resource(filename)
     local skeleton = data.skeleton
+	obj = obj or {}
     local status = {}
-    local skins = {}
     for name, handle in pairs(data.animations) do
         status[name] = {
             handle = handle,
@@ -21,41 +21,22 @@ local function create(filename)
             weight = 0,
         }
     end
-    if data.skins then
-        for i, skin in ipairs(data.skins) do
-            skins[i] = skinning.create(skin, skeleton)
-        end
-    end
-    local obj = {
-        skeleton = skeleton,
-        status = status,
-        blending_layers = ozz.BlendingJobLayerVector(),
-        blending_threshold = 0.1,
-        locals_pool = {},
-        models = ozz.MatrixVector(skeleton:num_joints()),
-        skins = skins,
-    }
-    return obj
-end
+	obj.skeleton = skeleton
+	obj.status = status
+	obj.blending_layers = ozz.BlendingJobLayerVector()
+	obj.blending_threshold = 0.1
+	obj.locals_pool = {}
+	obj.models = ozz.MatrixVector(skeleton:num_joints())
+    local skins = obj.skins or {}
+	obj.skins = skins
 
-function m:component_init()
-    local animations = {}
-    for e in w:select "INIT scene:in eid:in animation?update skinning?update animation_changed?out" do
-        if e.animation ~= nil then
-            local obj = create(e.animation)
-            e.animation = obj
-            e.animation_changed = true
-            animations[e.eid] = obj
-        elseif e.scene.parent ~= 0 then
-            local obj = animations[e.scene.parent]
-            if obj then
-                animations[e.eid] = obj
-                if e.skinning ~= nil then
-                    e.skinning = obj.skins[e.skinning]
-                end
-            end
-        end
-    end
+	if data.skins then
+		for i, skin in ipairs(data.skins) do
+			skins[i] = skinning.create(skin, skeleton, skins[i])
+		end
+	end
+
+    return obj
 end
 
 local function resize_locals(ani, n)
@@ -101,21 +82,15 @@ local function sampling(ani)
     ozz.LocalToModelJob(skeleton, locals, ani.models)
 end
 
-function m:animation_sample()
-    for e in w:select "animation_changed animation:in" do
-        local obj = e.animation
-        sampling(obj)
-        for _, skin in ipairs(obj.skins) do
-            skinning.build(obj.models, skin)
-        end
+api.frame = skinning.frame
+
+function api.sample(e)
+    local obj = e.animation
+    sampling(obj)
+    for _, skin in ipairs(obj.skins) do
+        skinning.build(obj.models, skin)
     end
 end
-
-function m:final()
-    w:clear "animation_changed"
-end
-
-local api = {}
 
 function api.set_status(e, name, ratio, weight)
     w:extend(e, "animation:in animation_changed?out")

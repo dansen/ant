@@ -42,6 +42,9 @@ bool window_peek_message() {
     }
 }
 
+void ant::window::set_message(ant::window::set_msg& msg) {
+}
+
 static void handle_cmd(android_app* app, int32_t cmd) {
     switch (cmd) {
         case APP_CMD_START:
@@ -57,11 +60,11 @@ static void handle_cmd(android_app* app, int32_t cmd) {
             int32_t w = ANativeWindow_getWidth(app->window);
             int32_t h = ANativeWindow_getHeight(app->window);
             if (!g_initialized) {
-                window_message_init(g_L, app->window, app->window, NULL, w, h);
+                window_message_init(g_L, app->window, app->window, NULL, NULL, w, h);
                 g_initialized = true;
             }
             else {
-                window_message_recreate(g_L, app->window,  app->window, NULL, w, h);
+                window_message_recreate(g_L, app->window,  app->window, NULL, NULL, w, h);
             }
             break;
         }

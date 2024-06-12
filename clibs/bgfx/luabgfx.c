@@ -21,7 +21,7 @@
 #include <android/log.h>
 #endif
 
-#if BGFX_API_VERSION != 126
+#if BGFX_API_VERSION != 127
 #   error BGFX_API_VERSION mismatch
 #endif
 
@@ -130,13 +130,27 @@ memory_tostring(lua_State *L) {
 static int
 memory_read(lua_State *L) {
 	struct memory *mem = (struct memory *)lua_touserdata(L, 1);
-	int index = luaL_checkinteger(L, 2)-1;
-	if (index < 0 || index >= mem->size) {
-		return 0;
+	const int ltype = lua_type(L, 2);
+	if (ltype == LUA_TNUMBER){
+		int index = lua_tointeger(L, 2)-1;
+		if (index < 0 || index >= mem->size) {
+			return 0;
+		}
+		uint8_t * data = (uint8_t *)mem->data;
+		lua_pushinteger(L, data[index]);
+		return 1;
 	}
-	uint8_t * data = (uint8_t *)mem->data;
-	lua_pushinteger(L, data[index]);
-	return 1;
+	
+	if(ltype == LUA_TSTRING) {
+		const char* key = lua_tostring(L, 2);
+		if (strcmp(key, "data") == 0){
+			lua_pushlightuserdata(L, mem->data);
+			return 1;
+		}
+
+		return luaL_error(L, "Invalid key:%s", key);
+	}
+	return luaL_error(L, "Invalid index type");
 }
 
 static int
@@ -211,6 +225,7 @@ memory_release(lua_State *L) {
 	return 0;
 }
 
+//we should consider move the memory to standalone c module
 static struct memory *
 memory_new(lua_State *L) {
 	struct memory *mem = (struct memory *)lua_newuserdatauv(L, sizeof(*mem), 1);
@@ -221,11 +236,12 @@ memory_new(lua_State *L) {
 	if (luaL_newmetatable(L, "BGFX_MEMORY")) {
 		luaL_Reg l[] = {
 			{ "__tostring", memory_tostring },
-			{ "__index", memory_read },
-			{ "__len", memory_size},
+			{ "__index", 	memory_read },
+			{ "__len", 		memory_size},
 			{ "__newindex", memory_write },
-			{ "__gc", memory_release },
-			{ NULL, NULL },
+			{ "__gc", 		memory_release },
+			
+			{ NULL, 		NULL },
 		};
 		luaL_setfuncs(L, l, 0);
 	}
@@ -275,6 +291,14 @@ getfield(lua_State *L, const char *key) {
 }
 
 static int
+getfield_int(lua_State *L, const char *key) {
+	lua_getfield(L, 1, key);
+	int v = lua_tointeger(L, -1);
+	lua_pop(L, 1);
+	return v;
+}
+
+static int
 lsetPlatformData(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	bgfx_platform_data_t bpdt;
@@ -285,6 +309,7 @@ lsetPlatformData(lua_State *L) {
 	bpdt.context = getfield(L, "context");
 	bpdt.backBuffer = getfield(L, "backBuffer");
 	bpdt.backBufferDS = getfield(L, "backBufferDS");
+	bpdt.type = (bgfx_native_window_handle_type_t)getfield_int(L, "type");
 	
 	BGFX(set_platform_data)(&bpdt);
 
@@ -612,6 +637,7 @@ linit(lua_State *L) {
 	init.platformData.context = NULL;
 	init.platformData.backBuffer = NULL;
 	init.platformData.backBufferDS = NULL;
+	init.platformData.type = BGFX_NATIVE_WINDOW_HANDLE_TYPE_DEFAULT;
 
 	if (!lua_isnoneornil(L, 1)) {
 		luaL_checktype(L, 1, LUA_TTABLE);
@@ -661,6 +687,7 @@ linit(lua_State *L) {
 		init.platformData.context = getfield(L, "context");
 		init.platformData.backBuffer = getfield(L, "backBuffer");
 		init.platformData.backBufferDS = getfield(L, "backBufferDS");
+		init.platformData.type = (bgfx_native_window_handle_type_t)getfield_int(L, "type");
 
 		//if (init.debug) {
 			luabgfx_getalloc(&init.allocator);
@@ -4481,8 +4508,9 @@ lsetViewRect(lua_State *L) {
 static int
 lsetViewName(lua_State *L) {
 	bgfx_view_id_t viewid = luaL_checkinteger(L, 1);
-	const char *name = luaL_checkstring(L, 2);
-	BGFX(set_view_name)(viewid, name);
+	size_t len;
+	const char *name = luaL_checklstring(L, 2, &len);
+	BGFX(set_view_name)(viewid, name, (int32_t)len);
 	return 0;
 }
 

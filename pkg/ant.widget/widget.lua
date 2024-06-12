@@ -25,13 +25,11 @@ local function create_dynamic_buffer(layout, num_vertices, num_indices)
 			num = 0,
 			declname = "p3|c40niu",
 			handle=bgfx.create_dynamic_vertex_buffer(vb_size, layoutmgr.get(layout).handle, "a"),
-			owned = true,
 		},
 		ib = {
 			start = 0,
 			num = 0,
 			handle = bgfx.create_dynamic_index_buffer(ib_size, "a"),
-			owned = true,
 		}
 	}
 end
@@ -50,7 +48,6 @@ function widget_drawer_sys:init()
 		data = {
 			scene = {},
 			mesh_result = create_dynamic_buffer(wd.declname, wd.vertices_num, wd.indices_num),
-			owned_mesh_buffer = true,
 			material = "/pkg/ant.resources/materials/line.material",
 			render_layer = "translucent",
 			visible = true,
@@ -92,14 +89,12 @@ local function append_buffers(vbfmt, vb, ibfmt, ib)
 
 	local vertex_offset = vbnum
 	bgfx.update(vbhandle, vertex_offset, bgfx.memory_buffer(vbfmt, vb));
-	ro.vb_num = vertex_offset + numvertices
+	MESH.set_num(ro.mesh_idx, "vb0", vertex_offset + numvertices)
 	local numindices = #ib
 	if numindices ~= 0 then
 		local _, ibnum, ibhandle = MESH.fetch(ro.mesh_idx, "ib")
 		local index_offset = ibnum
-		if index_offset == 0 then
-			offset_ib(index_offset, ib)
-		end
+		offset_ib(vertex_offset, ib)
 		
 		bgfx.update(ibhandle, index_offset, bgfx.memory_buffer(ibfmt, ib))
 		local ib_num = index_offset + numindices

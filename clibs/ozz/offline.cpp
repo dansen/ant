@@ -1,5 +1,5 @@
 #include <lua.hpp>
-#include <bee/lua/binding.h>
+#include <bee/lua/udata.h>
 #include "../luabind/lua2struct.h"
 
 #include "ozz.h"
@@ -170,7 +170,6 @@ int luaopen_ozz_offline(lua_State *L) {
 namespace bee::lua {
 	template <>
 	struct udata<ozz::animation::offline::RawAnimation> {
-		static inline auto name = "ozz::RawAnimation";
 		static inline auto metatable = ozzlua::RawAnimation::metatable;
 	};
 }

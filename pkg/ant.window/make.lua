@@ -1,6 +1,6 @@
 local lm = require "luamake"
 
-lm:lua_source "window" {
+lm:lua_src "window" {
     includes = {
         lm.AntDir .. "/3rd/bee.lua",
         lm.AntDir .. "/3rd/imgui",
@@ -20,6 +20,14 @@ lm:lua_source "window" {
     macos = {
         sources = {
             "src/platform/osx/*.mm",
+        },
+    },
+    linux = {
+        sources = {
+            "src/platform/linux/*.cpp",
+        },
+        links = {
+            "X11",
         },
     },
     ios = {

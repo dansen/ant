@@ -32,20 +32,42 @@ static int peek_message(lua_State *L) {
 }
 
 static int set_cursor(lua_State* L) {
-	lua_Integer cursor = luaL_checkinteger(L, 1);
-	window_set_cursor((int)cursor);
+	ant::window::set_msg set;
+	set.type = ant::window::set_msg::type::cursor;
+	set.cursor = (int)luaL_checkinteger(L, 1);
+	ant::window::set_message(set);
+	return 0;
+}
+
+static int show_cursor(lua_State* L) {
+	ant::window::set_msg set;
+	set.type = ant::window::set_msg::type::show_cursor;
+	set.show_cursor = !!lua_toboolean(L, 1);
+	ant::window::set_message(set);
 	return 0;
 }
 
 static int set_title(lua_State* L) {
-	auto title = lua_checkstrview(L, 1);
-	window_set_title(title);
+	ant::window::set_msg set;
+	set.type = ant::window::set_msg::type::title;
+	set.title = lua_checkstrview(L, 1);
+	ant::window::set_message(set);
 	return 0;
 }
 
 static int set_maxfps(lua_State *L) {
-	float fps = (float)luaL_checknumber(L, 1);
-	window_set_maxfps(fps);
+	ant::window::set_msg set;
+	set.type = ant::window::set_msg::type::maxfps;
+	set.maxfps = (float)luaL_checknumber(L, 1);
+	ant::window::set_message(set);
+	return 0;
+}
+
+static int set_fullscreen(lua_State *L) {
+	ant::window::set_msg set;
+	set.type = ant::window::set_msg::type::fullscreen;
+	set.fullscreen = !!lua_toboolean(L, 1);
+	ant::window::set_message(set);
 	return 0;
 }
 
@@ -57,8 +79,10 @@ luaopen_window(lua_State *L) {
 		{ "close", close },
 		{ "peek_message", peek_message },
 		{ "set_cursor", set_cursor },
+		{ "show_cursor", show_cursor },
 		{ "set_title", set_title },
 		{ "set_maxfps", set_maxfps },
+		{ "set_fullscreen", set_fullscreen },
 		{ NULL, NULL },
 	};
 	luaL_newlib(L, l);

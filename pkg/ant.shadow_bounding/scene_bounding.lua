@@ -41,6 +41,7 @@ local nearHit, farHit = 1, 100
 local function build_scene_info(C, sb)
 	local mqidx = queuemgr.queue_index "main_queue"
 
+	local F = C.camera.frustum
 	local zn, zf = math.maxinteger, -math.maxinteger
 	local PSR_ln, PSR_lf = math.maxinteger, -math.maxinteger
 	local PSC_ln, PSC_lf = math.maxinteger, -math.maxinteger
@@ -89,18 +90,22 @@ local function build_scene_info(C, sb)
 	end
 
 	local si = sb.scene_info
-	if math3d.aabb_isvalid(PSR) then
-		if math3d.aabb_isvalid(PSC) then
-			si.PSC = PSC
-		end
-
-		si.zn, si.zf = math.max(C.camera.frustum.n, zn), math.min(C.camera.frustum.f, zf)
-		si.PSR_ln, si.PSR_lf = PSR_ln, PSR_lf
-		si.PSC_ln, si.PSC_lf = PSC_ln, PSC_lf
-		si.nearHit, si.farHit = nearHit, farHit
-	
-		si.PSR = PSR
+	if math3d.aabb_isvalid(PSC) then
+		si.PSC = PSC
 	end
+
+	if math3d.aabb_isvalid(PSR) then
+		si.zn, si.zf = math.max(zn, F.n), math.min(zf, F.f)
+	else
+		si.zn, si.zf = F.n, F.f
+		PSR = math3d.minmax(math3d.frustum_points(C.camera.viewprojmat))
+	end
+
+	si.PSR_ln, si.PSR_lf = PSR_ln, PSR_lf
+	si.PSC_ln, si.PSC_lf = PSC_ln, PSC_lf
+	si.nearHit, si.farHit = nearHit, farHit
+
+	si.PSR = PSR
 end
 
 function sb_sys:update_camera_bounding()

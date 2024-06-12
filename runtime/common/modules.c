@@ -4,7 +4,9 @@
 #include <bgfx/c99/bgfx.h>
 
 int luaopen_android(lua_State* L);
+int luaopen_bee_channel(lua_State* L);
 int luaopen_bee_debugging(lua_State* L);
+int luaopen_bee_epoll(lua_State* L);
 int luaopen_bee_filesystem(lua_State* L);
 int luaopen_bee_filewatch(lua_State* L);
 int luaopen_bee_platform(lua_State* L);
@@ -12,6 +14,7 @@ int luaopen_bee_select(lua_State* L);
 int luaopen_bee_serialization(lua_State* L);
 int luaopen_bee_socket(lua_State* L);
 int luaopen_bee_subprocess(lua_State* L);
+int luaopen_bee_sys(lua_State* L);
 int luaopen_bee_thread(lua_State* L);
 int luaopen_bee_time(lua_State* L);
 int luaopen_bee_windows(lua_State* L);
@@ -75,11 +78,14 @@ int luaopen_cell_core(lua_State *L);
 
 void ant_loadmodules(lua_State* L) {
     static const luaL_Reg modules[] = {
+        { "bee.channel", luaopen_bee_channel },
         { "bee.debugging", luaopen_bee_debugging },
+        { "bee.epoll", luaopen_bee_epoll },
         { "bee.filesystem", luaopen_bee_filesystem },
         { "bee.select", luaopen_bee_select },
         { "bee.serialization", luaopen_bee_serialization },
         { "bee.socket", luaopen_bee_socket },
+        { "bee.sys", luaopen_bee_sys },
         { "bee.thread", luaopen_bee_thread },
         { "bee.platform", luaopen_bee_platform },
         { "bee.time", luaopen_bee_time },
@@ -132,16 +138,11 @@ void ant_loadmodules(lua_State* L) {
         { "imgui.internal", luaopen_imgui_internal },
         { "imgui.widgets", luaopen_imgui_widgets },
         { "cell.core", luaopen_cell_core },
-#if BX_PLATFORM_IOS
-        { "ios", luaopen_ios },
-        { "window.ios", luaopen_window_ios },
-#endif
-#if BX_PLATFORM_ANDROID
-        { "android", luaopen_android },
-#endif
-#if defined(ANT_RUNTIME)
         { "firmware", luaopen_firmware },
-#else
+        { "system.scene", luaopen_system_scene },
+        { "cull.core", luaopen_system_cull},
+        { "zip", luaopen_zip },
+#if !BX_PLATFORM_IOS && !BX_PLATFORM_ANDROID
         { "ozz.offline", luaopen_ozz_offline },
         { "bee.filewatch", luaopen_bee_filewatch },
         { "bee.subprocess", luaopen_bee_subprocess },
@@ -149,13 +150,17 @@ void ant_loadmodules(lua_State* L) {
         { "filedialog", luaopen_filedialog },
 #endif
 #endif
-        { "system.scene", luaopen_system_scene },
-        { "cull.core", luaopen_system_cull},
-        { "zip", luaopen_zip },
-#if !BX_PLATFORM_LINUX
         { "window", luaopen_window },
-        { "httpc", luaopen_httpc },
         { "font.util", luaopen_font_util },
+#if !BX_PLATFORM_LINUX
+        { "httpc", luaopen_httpc },
+#endif
+#if BX_PLATFORM_IOS
+        { "ios", luaopen_ios },
+        { "window.ios", luaopen_window_ios },
+#endif
+#if BX_PLATFORM_ANDROID
+        { "android", luaopen_android },
 #endif
 #if BX_PLATFORM_WINDOWS
         { "bee.windows", luaopen_bee_windows },

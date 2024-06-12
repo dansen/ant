@@ -1,7 +1,7 @@
 #include <lua.hpp>
 #include <string>
 #include <string_view>
-#include <bee/lua/binding.h>
+#include <bee/lua/udata.h>
 
 #import <Foundation/Foundation.h>
 #include "channel.h"
@@ -367,7 +367,6 @@ int luaopen_httpc(lua_State* L) {
 namespace bee::lua {
     template <>
     struct udata<HttpcSession> {
-        static inline auto name = "HttpcSession";
         static inline auto metatable = +[](lua_State*){};
     };
 }

@@ -6,7 +6,6 @@ local SELECT_READ <const> = select.SELECT_READ
 local SELECT_WRITE <const> = select.SELECT_WRITE
 local protocol = require "protocol"
 local lfs = require "bee.filesystem"
-local cthread = require "bee.thread"
 local sender
 
 local m = {}
@@ -67,12 +66,12 @@ end
 local luaexe
 local repopath
 local function spawnFileServer()
-    assert(subprocess.spawn {
+    return subprocess.spawn {
         luaexe,
         (luaexe:sub(-7) == "lua.exe" or luaexe:sub(-3) == "lua") and "tools/fileserver/main.lua" or "3rd/ant/tools/fileserver/main.lua",
         repopath,
         console = "disable",
-    })
+    }
 end
 
 local message = {}
@@ -103,6 +102,7 @@ function m.handle_event()
         if ev & SELECT_READ ~= 0 then
             local reading = fd:recv()
             if reading == nil then
+                selector:event_del(fd)
                 fd:close()
                 break
             elseif reading == false then
@@ -129,7 +129,8 @@ function m.init(lua_path, repo_path)
     luaexe, repopath = lua_path, repo_path
     local fd = connectFileServer()
     if not fd then
-        spawnFileServer()
+        m.subprocess = spawnFileServer()
+        assert(m.subprocess)
         fd = connectFileServer()
         print("connect editor fileserver")
     else

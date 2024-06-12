@@ -280,7 +280,7 @@ bool window_init(lua_State* L, const char *size) {
     g_L = L;
 
     float scale = [win backingScaleFactor];
-    window_message_init(L, win, getLayer(win), 0, w * scale, h * scale);
+    window_message_init(L, win, getLayer(win), NULL, NULL, w * scale, h * scale);
     return true;
 }
 
@@ -391,13 +391,5 @@ bool window_peek_message() {
     return true;
 }
 
-void window_set_cursor(int cursor) {
-    //TODO
-}
-
-void window_set_title(bee::zstring_view title) {
-    //TODO
-}
-
-void window_set_maxfps(float fps) {
+void ant::window::set_message(ant::window::set_msg& msg) {
 }

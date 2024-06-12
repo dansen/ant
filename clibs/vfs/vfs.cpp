@@ -4,9 +4,9 @@
 using namespace std::literals;
 
 static constexpr std::string_view initscript = R"(
+__ANT_RUNTIME__ = ...
 local vfs = {}
 local fastio = require "fastio"
-__ANT_RUNTIME__ = package.preload.firmware ~= nil
 if __ANT_RUNTIME__ then
     local fw = require "firmware"
     function vfs.read(path)
@@ -65,11 +65,60 @@ package = {
 return vfs
 )"sv;
 
+#if defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__) || defined(__ANDROID__)
+static bool __ANT_RUNTIME__ = true;
+#elif defined(_WIN32)
+#include <windows.h>
+static bool GET_ANT_RUNTIME() {
+    int argc;
+    wchar_t** argv = ::CommandLineToArgvW(::GetCommandLineW(), &argc);
+    if (argv && argc >= 2) {
+        if (wcscmp(argv[1], L"-rt") == 0) {
+            LocalFree(argv);
+            return true;
+        }
+    }
+    size_t prog_sz = wcslen(argv[0]);
+    bool is_rt = true;
+    if (prog_sz >=7 && wcscmp(argv[0] + prog_sz - 7, L"ant.exe") == 0) {
+        is_rt = false;
+    } else if (prog_sz >=3 && wcscmp(argv[0] + prog_sz - 3, L"ant") == 0) {
+        is_rt = false;
+    }
+    LocalFree(argv);
+    return is_rt;
+}
+static bool __ANT_RUNTIME__ = GET_ANT_RUNTIME();
+#elif defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+#include <crt_externs.h>
+static bool GET_ANT_RUNTIME() {
+    int argc = *_NSGetArgc();
+    char** argv = *_NSGetArgv();
+    if (argv && argc >= 2) {
+        if (strcmp(argv[1], "-rt") == 0) {
+            return true;
+        }
+    }
+    size_t prog_sz = strlen(argv[0]);
+    bool is_rt = true;
+    if (prog_sz >=7 && strcmp(argv[0] + prog_sz - 7, "ant.exe") == 0) {
+        is_rt = false;
+    } else if (prog_sz >=3 && strcmp(argv[0] + prog_sz - 3, "ant") == 0) {
+        is_rt = false;
+    }
+    return false;
+}
+static bool __ANT_RUNTIME__ = GET_ANT_RUNTIME();
+#else
+static bool __ANT_RUNTIME__ = false;
+#endif
+
 extern "C"
 int luaopen_vfs(lua_State* L) {
     if (luaL_loadbuffer(L, initscript.data(), initscript.size(), "=(vfs)") != LUA_OK) {
         return lua_error(L);
     }
-    lua_call(L, 0, 1);
+    lua_pushboolean(L, __ANT_RUNTIME__);
+    lua_call(L, 1, 1);
     return 1;
 }

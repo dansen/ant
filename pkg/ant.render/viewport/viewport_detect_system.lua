@@ -49,7 +49,6 @@ local function check_viewrect_size(queue_vr, newsize)
 	local nw, nh = newsize.w, newsize.h
 	if queue_vr.w ~= nw or queue_vr.h ~= nh then
 		queue_vr.w, queue_vr.h = nw, nh
-		queue_vr.x, queue_vr.y = mu.cvt_size(queue_vr.x, 1, 0), mu.cvt_size(queue_vr.x, 1, 0)
 	end
 end
 
@@ -88,30 +87,12 @@ function vp_detect_sys:post_init()
 end
 
 local scene_viewrect_changed_mb = world:sub{"scene_viewrect_changed"}
---local scene_ratio_changed_mb = world:sub{"scene_ratio_changed"}
 
 function vp_detect_sys:data_changed()
 	for _, vr in scene_viewrect_changed_mb:unpack() do
-		iviewport.viewrect = vr
 		if vr.w ~= 0 and vr.h ~= 0 then
 			update_render_target(vr)
 			break
 		end
 	end
-
-	-- for _, newratio in scene_ratio_changed_mb:unpack() do
-	-- 	if newratio <= 1e-6 then
-	-- 		error "scene ratio should larger than 0"
-	-- 	end
-	-- 	local vr = iviewport.viewrect
-	-- 	update_render_target(vr)
-	-- 	do
-	-- 		local mq = w:first "main_queue render_target:in"
-	-- 		local vr = mq.render_target.view_rect
-	-- 		log.info(("scene viewrect:x=%2f, y=%2f, w=%2f, h=%2f, scene_ratio=%2f"):format(vr.x, vr.y, vr.w, vr.h, vr.ratio or 1.0))
-	-- 	end
-
-	-- 	iviewport.scene_ratio = newratio
-	-- 	break
-	-- end
 end

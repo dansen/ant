@@ -1,5 +1,6 @@
 #include <lua.hpp>
 #include <bee/lua/binding.h>
+#include <bee/lua/udata.h>
 
 #include "ozz.h"
 
@@ -121,12 +122,10 @@ void init_job(lua_State* L) {
 namespace bee::lua {
     template <>
     struct udata<ozz::animation::SamplingJob::Context> {
-        static inline auto name = "ozz::SamplingJob::Context";
         static inline auto metatable = ozzlua::SamplingJobContext::metatable;
     };
     template <>
     struct udata<ozzBlendingJobLayerVector> {
-        static inline auto name = "ozzBlendingJobLayerVector";
         static inline auto metatable = ozzlua::BlendingJobLayerVector::metatable;
     };
 }

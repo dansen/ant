@@ -123,8 +123,9 @@ function ImGui.InputTextFlags(flags) end
 ---| "Leaf"                 #  No collapsing, no arrow (use as a convenience for leaf nodes).
 ---| "Bullet"               #  Display a bullet instead of arrow. IMPORTANT: node can still be marked open/close if you don't set the _Leaf flag!
 ---| "FramePadding"         #  Use FramePadding (even for an unframed text node) to vertically align text baseline to regular widget height. Equivalent to calling AlignTextToFramePadding().
----| "SpanAvailWidth"       #  Extend hit box to the right-most edge, even if not framed. This is not the default in order to allow adding other items on the same line. In the future we may refactor the hit system to be front-to-back, allowing natural overlaps and then this can become the default.
----| "SpanFullWidth"        #  Extend hit box to the left-most and right-most edges (bypass the indented area).
+---| "SpanAvailWidth"       #  Extend hit box to the right-most edge, even if not framed. This is not the default in order to allow adding other items on the same line without using AllowOverlap mode.
+---| "SpanFullWidth"        #  Extend hit box to the left-most and right-most edges (cover the indent area).
+---| "SpanTextWidth"        #  Narrow hit box + narrow hovering highlight, will only cover the label text.
 ---| "SpanAllColumns"       #  Frame will span all columns of its container table (text will still fit in current column)
 ---| "NavLeftJumpsBackHere" #  (WIP) Nav: left direction may move to this TreeNode() from any of its child (items submitted between TreeNode and TreePop)
 ---| "CollapsingHeader"
@@ -333,6 +334,30 @@ function ImGui.DockNodeFlags(flags) end
 ---@param flags _ImGuiDragDropFlags_Name[]
 ---@return ImGui.DragDropFlags
 function ImGui.DragDropFlags(flags) end
+
+--
+-- Flags for Shortcut(), SetNextItemShortcut(),
+-- (and for upcoming extended versions of IsKeyPressed(), IsMouseClicked(), Shortcut(), SetKeyOwner(), SetItemKeyOwner() that are still in imgui_internal.h)
+-- Don't mistake with ImGuiInputTextFlags! (which is for ImGui::InputText() function)
+--
+---@class ImGui.InputFlags
+
+---@alias _ImGuiInputFlags_Name
+---| "None"
+---| "Repeat"               #  Enable repeat. Return true on successive repeats. Default for legacy IsKeyPressed(). NOT Default for legacy IsMouseClicked(). MUST BE == 1.
+---| "RouteActive"          #  Route to active item only.
+---| "RouteFocused"         #  Route to windows in the focus stack (DEFAULT). Deep-most focused window takes inputs. Active item takes inputs over deep-most focused window.
+---| "RouteGlobal"          #  Global route (unless a focused window or active item registered the route).
+---| "RouteAlways"          #  Do not register route, poll keys directly.
+---| "RouteOverFocused"     #  Option: global route: higher priority than focused route (unless active item in focused route).
+---| "RouteOverActive"      #  Option: global route: higher priority than active item. Unlikely you need to use that: will interfere with every active items, e.g. CTRL+A registered by InputText will be overridden by this. May not be fully honored as user/internal code is likely to always assume they can access keys when active.
+---| "RouteUnlessBgFocused" #  Option: global route: will not be applied if underlying background/void is focused (== no Dear ImGui windows are focused). Useful for overlay applications.
+---| "RouteFromRootWindow"  #  Option: route evaluated from the point of view of root window rather than current window.
+---| "Tooltip"              #  Automatically display a tooltip when hovering item [BETA] Unsure of right api (opt-in/opt-out)
+
+---@param flags _ImGuiInputFlags_Name[]
+---@return ImGui.InputFlags
+function ImGui.InputFlags(flags) end
 
 --
 -- Configuration flags stored in io.ConfigFlags. Set by user/application.
@@ -662,6 +687,9 @@ ImGui.DataType = {}
 --
 -- A cardinal direction
 --
+--
+-- Forward declared enum type ImGuiDir
+--
 ---@alias ImGui.Dir
 ---| `ImGui.Dir.None`
 ---| `ImGui.Dir.Left`
@@ -672,6 +700,9 @@ ImGui.Dir = {}
 
 --
 -- A sorting direction
+--
+--
+-- Forward declared enum type ImGuiSortDirection
 --
 ---@alias ImGui.SortDirection
 ---| `ImGui.SortDirection.None`
@@ -846,11 +877,10 @@ ImGui.Key = {}
 
 ---@alias ImGui.Mod
 ---| `ImGui.Mod.None`
----| `ImGui.Mod.Ctrl`     #  Ctrl
----| `ImGui.Mod.Shift`    #  Shift
----| `ImGui.Mod.Alt`      #  Option/Menu
----| `ImGui.Mod.Super`    #  Cmd/Super/Windows
----| `ImGui.Mod.Shortcut` #  Alias for Ctrl (non-macOS) _or_ Super (macOS).
+---| `ImGui.Mod.Ctrl`  #  Ctrl (non-macOS), Cmd (macOS)
+---| `ImGui.Mod.Shift` #  Shift
+---| `ImGui.Mod.Alt`   #  Option/Menu
+---| `ImGui.Mod.Super` #  Windows/Super (non-macOS), Ctrl (macOS)
 ImGui.Mod = {}
 
 --
@@ -919,41 +949,45 @@ ImGui.Col = {}
 -- - The enum only refers to fields of ImGuiStyle which makes sense to be pushed/popped inside UI code.
 --   During initialization or between frames, feel free to just poke into ImGuiStyle directly.
 -- - Tip: Use your programming IDE navigation facilities on the names in the _second column_ below to find the actual members and their description.
---   In Visual Studio IDE: CTRL+comma ("Edit.GoToAll") can follow symbols in comments, whereas CTRL+F12 ("Edit.GoToImplementation") cannot.
---   With Visual Assist installed: ALT+G ("VAssistX.GoToImplementation") can also follow symbols in comments.
+--   - In Visual Studio: CTRL+comma ("Edit.GoToAll") can follow symbols inside comments, whereas CTRL+F12 ("Edit.GoToImplementation") cannot.
+--   - In Visual Studio w/ Visual Assist installed: ALT+G ("VAssistX.GoToImplementation") can also follow symbols inside comments.
+--   - In VS Code, CLion, etc.: CTRL+click can follow symbols inside comments.
 -- - When changing this enum, you need to update the associated internal table GStyleVarInfo[] accordingly. This is where we link enum values to members offset/type.
 --
 ---@alias ImGui.StyleVar
----| `ImGui.StyleVar.Alpha`                   #  float     Alpha
----| `ImGui.StyleVar.DisabledAlpha`           #  float     DisabledAlpha
----| `ImGui.StyleVar.WindowPadding`           #  ImVec2    WindowPadding
----| `ImGui.StyleVar.WindowRounding`          #  float     WindowRounding
----| `ImGui.StyleVar.WindowBorderSize`        #  float     WindowBorderSize
----| `ImGui.StyleVar.WindowMinSize`           #  ImVec2    WindowMinSize
----| `ImGui.StyleVar.WindowTitleAlign`        #  ImVec2    WindowTitleAlign
----| `ImGui.StyleVar.ChildRounding`           #  float     ChildRounding
----| `ImGui.StyleVar.ChildBorderSize`         #  float     ChildBorderSize
----| `ImGui.StyleVar.PopupRounding`           #  float     PopupRounding
----| `ImGui.StyleVar.PopupBorderSize`         #  float     PopupBorderSize
----| `ImGui.StyleVar.FramePadding`            #  ImVec2    FramePadding
----| `ImGui.StyleVar.FrameRounding`           #  float     FrameRounding
----| `ImGui.StyleVar.FrameBorderSize`         #  float     FrameBorderSize
----| `ImGui.StyleVar.ItemSpacing`             #  ImVec2    ItemSpacing
----| `ImGui.StyleVar.ItemInnerSpacing`        #  ImVec2    ItemInnerSpacing
----| `ImGui.StyleVar.IndentSpacing`           #  float     IndentSpacing
----| `ImGui.StyleVar.CellPadding`             #  ImVec2    CellPadding
----| `ImGui.StyleVar.ScrollbarSize`           #  float     ScrollbarSize
----| `ImGui.StyleVar.ScrollbarRounding`       #  float     ScrollbarRounding
----| `ImGui.StyleVar.GrabMinSize`             #  float     GrabMinSize
----| `ImGui.StyleVar.GrabRounding`            #  float     GrabRounding
----| `ImGui.StyleVar.TabRounding`             #  float     TabRounding
----| `ImGui.StyleVar.TabBarBorderSize`        #  float     TabBarBorderSize
----| `ImGui.StyleVar.ButtonTextAlign`         #  ImVec2    ButtonTextAlign
----| `ImGui.StyleVar.SelectableTextAlign`     #  ImVec2    SelectableTextAlign
----| `ImGui.StyleVar.SeparatorTextBorderSize` #  float  SeparatorTextBorderSize
----| `ImGui.StyleVar.SeparatorTextAlign`      #  ImVec2    SeparatorTextAlign
----| `ImGui.StyleVar.SeparatorTextPadding`    #  ImVec2    SeparatorTextPadding
----| `ImGui.StyleVar.DockingSeparatorSize`    #  float     DockingSeparatorSize
+---| `ImGui.StyleVar.Alpha`                       #  float     Alpha
+---| `ImGui.StyleVar.DisabledAlpha`               #  float     DisabledAlpha
+---| `ImGui.StyleVar.WindowPadding`               #  ImVec2    WindowPadding
+---| `ImGui.StyleVar.WindowRounding`              #  float     WindowRounding
+---| `ImGui.StyleVar.WindowBorderSize`            #  float     WindowBorderSize
+---| `ImGui.StyleVar.WindowMinSize`               #  ImVec2    WindowMinSize
+---| `ImGui.StyleVar.WindowTitleAlign`            #  ImVec2    WindowTitleAlign
+---| `ImGui.StyleVar.ChildRounding`               #  float     ChildRounding
+---| `ImGui.StyleVar.ChildBorderSize`             #  float     ChildBorderSize
+---| `ImGui.StyleVar.PopupRounding`               #  float     PopupRounding
+---| `ImGui.StyleVar.PopupBorderSize`             #  float     PopupBorderSize
+---| `ImGui.StyleVar.FramePadding`                #  ImVec2    FramePadding
+---| `ImGui.StyleVar.FrameRounding`               #  float     FrameRounding
+---| `ImGui.StyleVar.FrameBorderSize`             #  float     FrameBorderSize
+---| `ImGui.StyleVar.ItemSpacing`                 #  ImVec2    ItemSpacing
+---| `ImGui.StyleVar.ItemInnerSpacing`            #  ImVec2    ItemInnerSpacing
+---| `ImGui.StyleVar.IndentSpacing`               #  float     IndentSpacing
+---| `ImGui.StyleVar.CellPadding`                 #  ImVec2    CellPadding
+---| `ImGui.StyleVar.ScrollbarSize`               #  float     ScrollbarSize
+---| `ImGui.StyleVar.ScrollbarRounding`           #  float     ScrollbarRounding
+---| `ImGui.StyleVar.GrabMinSize`                 #  float     GrabMinSize
+---| `ImGui.StyleVar.GrabRounding`                #  float     GrabRounding
+---| `ImGui.StyleVar.TabRounding`                 #  float     TabRounding
+---| `ImGui.StyleVar.TabBorderSize`               #  float     TabBorderSize
+---| `ImGui.StyleVar.TabBarBorderSize`            #  float     TabBarBorderSize
+---| `ImGui.StyleVar.TableAngledHeadersAngle`     #  float     TableAngledHeadersAngle
+---| `ImGui.StyleVar.TableAngledHeadersTextAlign` #  ImVec2  TableAngledHeadersTextAlign
+---| `ImGui.StyleVar.ButtonTextAlign`             #  ImVec2    ButtonTextAlign
+---| `ImGui.StyleVar.SelectableTextAlign`         #  ImVec2    SelectableTextAlign
+---| `ImGui.StyleVar.SeparatorTextBorderSize`     #  float     SeparatorTextBorderSize
+---| `ImGui.StyleVar.SeparatorTextAlign`          #  ImVec2    SeparatorTextAlign
+---| `ImGui.StyleVar.SeparatorTextPadding`        #  ImVec2    SeparatorTextPadding
+---| `ImGui.StyleVar.DockingSeparatorSize`        #  float     DockingSeparatorSize
 ImGui.StyleVar = {}
 
 --
@@ -1051,8 +1085,6 @@ function ImStringBuf:Resize(size) end
 ---@field x number
 ---@field y number
 
----@class ImDrawIdx
-
 ---@class ImGuiID
 
 ---@class ImS8
@@ -1071,11 +1103,15 @@ function ImStringBuf:Resize(size) end
 
 ---@class ImU64
 
+---@class ImDrawIdx
+
 ---@class ImWchar32
 
 ---@class ImWchar16
 
 ---@alias ImWchar ImWchar32
+
+---@class ImGuiContext
 
 ---@class ImGuiIO
 ---@field ConfigFlags ImGui.ConfigFlags            #  = 0              // See ImGuiConfigFlags_ enum. Set by user/application. Gamepad/keyboard navigation options, etc.
@@ -1097,7 +1133,7 @@ function ImStringBuf:Resize(size) end
 ---@field ConfigViewportsNoDecoration boolean      #  = true           // Disable default OS window decoration flag for secondary viewports. When a viewport doesn't want window decorations, ImGuiViewportFlags_NoDecoration will be set on it. Enabling decoration can create subsequent issues at OS levels (e.g. minimum window size).
 ---@field ConfigViewportsNoDefaultParent boolean   #  = false          // Disable default OS parenting to main viewport for secondary viewports. By default, viewports are marked with ParentViewportId = <main_viewport>, expecting the platform backend to setup a parent/child relationship between the OS windows (some backend may ignore this). Set to true if you want the default to be 0, then all viewports will be top-level OS windows.
 ---@field MouseDrawCursor boolean                  #  = false          // Request ImGui to draw a mouse cursor for you (if you are on a platform without a mouse cursor). Cannot be easily renamed to 'io.ConfigXXX' because this is frequently used by backend implementations.
----@field ConfigMacOSXBehaviors boolean            #  = defined(__APPLE__) // OS X style: Text editing cursor movement using Alt instead of Ctrl, Shortcuts using Cmd/Super instead of Ctrl, Line/Text Start and End using Cmd+Arrows instead of Home/End, Double click selects by word instead of selecting whole text, Multi-selection in lists uses Cmd/Super instead of Ctrl.
+---@field ConfigMacOSXBehaviors boolean            #  = defined(__APPLE__) // Swap Cmd<>Ctrl keys + OS X style text editing cursor movement using Alt instead of Ctrl, Shortcuts using Cmd/Super instead of Ctrl, Line/Text Start and End using Cmd+Arrows instead of Home/End, Double click selects by word instead of selecting whole text, Multi-selection in lists uses Cmd/Super instead of Ctrl.
 ---@field ConfigInputTrickleEventQueue boolean     #  = true           // Enable input queue trickling: some types of events submitted during the same frame (e.g. button down + up) will be spread over multiple frames, improving interactions with low framerates.
 ---@field ConfigInputTextCursorBlink boolean       #  = true           // Enable blinking cursor (optional as some users consider it to be distracting).
 ---@field ConfigInputTextEnterKeepActive boolean   #  = false          // [BETA] Pressing Enter will keep item active and select contents (single-line only).
@@ -1133,6 +1169,7 @@ function ImStringBuf:Resize(size) end
 ---@field MetricsRenderWindows integer             #  Number of visible windows
 ---@field MetricsActiveWindows integer             #  Number of active windows
 ---@field MouseDelta ImVec2                        #  Mouse delta. Note that this is zero if either current or previous position are invalid (-FLT_MAX,-FLT_MAX), so a disappearing/reappearing mouse won't have a huge delta.
+---@field Ctx ImGuiContext                         #  Parent UI context (needs to be set explicitly by parent).
 ---@field MousePos ImVec2                          #  Mouse position, in pixels. Set to ImVec2(-FLT_MAX, -FLT_MAX) if mouse is unavailable (on another screen, etc.)
 ---@field MouseWheel number                        #  Mouse wheel Vertical: 1 unit scrolls about 5 lines text. >0 scrolls Up, <0 scrolls Down. Hold SHIFT to turn vertical scroll into horizontal scroll.
 ---@field MouseWheelH number                       #  Mouse wheel Horizontal. >0 scrolls Left, <0 scrolls Right. Most users don't have a mouse with a horizontal wheel, may not be filled by all backends.
@@ -1142,10 +1179,11 @@ function ImStringBuf:Resize(size) end
 ---@field KeyShift boolean                         #  Keyboard modifier down: Shift
 ---@field KeyAlt boolean                           #  Keyboard modifier down: Alt
 ---@field KeySuper boolean                         #  Keyboard modifier down: Cmd/Super/Windows
----@field KeyMods ImGuiKeyChord                    #  Key mods flags (any of ImGuiMod_Ctrl/ImGuiMod_Shift/ImGuiMod_Alt/ImGuiMod_Super flags, same as io.KeyCtrl/KeyShift/KeyAlt/KeySuper but merged into flags. DOES NOT CONTAINS ImGuiMod_Shortcut which is pretranslated). Read-only, updated by NewFrame()
+---@field KeyMods ImGuiKeyChord                    #  Key mods flags (any of ImGuiMod_Ctrl/ImGuiMod_Shift/ImGuiMod_Alt/ImGuiMod_Super flags, same as io.KeyCtrl/KeyShift/KeyAlt/KeySuper but merged into flags. Read-only, updated by NewFrame()
 ---@field WantCaptureMouseUnlessPopupClose boolean #  Alternative to WantCaptureMouse: (WantCaptureMouse == true && WantCaptureMouseUnlessPopupClose == false) when a click over void is expected to close a popup.
 ---@field MousePosPrev ImVec2                      #  Previous mouse position (note that MouseDelta is not necessary == MousePos-MousePosPrev, in case either position is invalid)
 ---@field MouseWheelRequestAxisSwap boolean        #  On a non-Mac system, holding SHIFT requests WheelY to perform the equivalent of a WheelX event. On a Mac system this is already enforced by the system.
+---@field MouseCtrlLeftAsRightClick boolean        #  (OSX) Set to true when the current click was a ctrl-click that spawned a simulated right click
 ---@field PenPressure number                       #  Touch/Pen pressure (0.0f to 1.0f, should be >0.0f only when MouseDown[0] == true). Helper storage currently unused by Dear ImGui.
 ---@field AppFocusLost boolean                     #  Only modify via AddFocusEvent()
 ---@field AppAcceptingEvents boolean               #  Only modify via SetAppAcceptingEvents()
@@ -1263,6 +1301,7 @@ function ImGuiIO.ClearInputKeys() end
 
 
 ---@class ImGuiInputTextCallbackData
+---@field Ctx ImGuiContext              #  Parent UI context
 ---@field EventFlag ImGui.InputTextFlags#  One ImGuiInputTextFlags_Callback*    // Read-only
 ---@field Flags ImGui.InputTextFlags    #  What user passed to InputText()      // Read-only
 ---@field UserData lightuserdata        #  What user passed to InputText()      // Read-only
@@ -1291,6 +1330,17 @@ function ImGuiInputTextCallbackData.ClearSelection() end
 ---@return boolean
 function ImGuiInputTextCallbackData.HasSelection() end
 
+
+---@class ImGuiWindowClass
+---@field ClassId ImGuiID                               #  User data. 0 = Default class (unclassed). Windows of different classes cannot be docked with each others.
+---@field ParentViewportId ImGuiID                      #  Hint for the platform backend. -1: use default. 0: request platform backend to not parent the platform. != 0: request platform backend to create a parent<>child relationship between the platform windows. Not conforming backends are free to e.g. parent every viewport to the main viewport or not.
+---@field FocusRouteParentWindowId ImGuiID              #  ID of parent window for shortcut focus route evaluation, e.g. Shortcut() call from Parent Window will succeed when this window is focused.
+---@field ViewportFlagsOverrideSet ImGui.ViewportFlags  #  Viewport flags to set when a window of this class owns a viewport. This allows you to enforce OS decoration or task bar icon, override the defaults on a per-window basis.
+---@field ViewportFlagsOverrideClear ImGui.ViewportFlags#  Viewport flags to clear when a window of this class owns a viewport. This allows you to enforce OS decoration or task bar icon, override the defaults on a per-window basis.
+---@field TabItemFlagsOverrideSet ImGui.TabItemFlags    #  [EXPERIMENTAL] TabItem flags to set when a window of this class gets submitted into a dock node tab bar. May use with ImGuiTabItemFlags_Leading or ImGuiTabItemFlags_Trailing.
+---@field DockNodeFlagsOverrideSet ImGui.DockNodeFlags  #  [EXPERIMENTAL] Dock node flags to set when a window of this class is hosted by a dock node (it doesn't have to be selected!)
+---@field DockingAlwaysTabBar boolean                   #  Set to true to enforce single floating windows of this class always having their own docking node (equivalent of setting the global io.ConfigDockingAlwaysTabBar)
+---@field DockingAllowUnclassed boolean                 #  Set to true to allow windows of this class to be docked/merged with an unclassed window. // FIXME-DOCK: Move to DockNodeFlags override?
 
 ---@class ImFontConfig
 ---@field FontData lightuserdata      #           // TTF/OTF data
@@ -1472,7 +1522,7 @@ function ImFontAtlas.GetGlyphRangesVietnamese() end
 --
 -- You can request arbitrary rectangles to be packed into the atlas, for your own purposes.
 -- - After calling Build(), you can query the rectangle position and render your pixels.
--- - If you render colored output, set 'atlas->TexPixelsUseColors = true' as this may help some backends decide of prefered texture format.
+-- - If you render colored output, set 'atlas->TexPixelsUseColors = true' as this may help some backends decide of preferred texture format.
 -- - You can also request your rectangles to be mapped as font glyph (given a font + Unicode point),
 --   so you can render e.g. custom colorful icons and use them as regular glyphs.
 -- - Read docs/FONTS.md for more details about using colorful icons.
@@ -1525,8 +1575,28 @@ function ImGuiViewport.GetWorkCenter() end
 
 
 ---@return userdata
+---@return ImGuiIO
+function ImGui.IO() end
+
+---@return userdata
+---@return ImGuiInputTextCallbackData
+function ImGui.InputTextCallbackData() end
+
+---@return userdata
+---@return ImGuiWindowClass
+function ImGui.WindowClass() end
+
+---@return userdata
 ---@return ImFontConfig
 function ImGui.FontConfig() end
+
+---@return userdata
+---@return ImFontAtlas
+function ImGui.FontAtlas() end
+
+---@return userdata
+---@return ImGuiViewport
+function ImGui.Viewport() end
 
 ---@param str? string
 ---@return ImStringBuf
@@ -1539,12 +1609,20 @@ function ImGui.StringBuf(str) end
 --   for each static/DLL boundary you are calling from. Read "Context and Memory Allocators" section of imgui.cpp for details.
 --
 ---@param shared_font_atlas? ImFontAtlas
+---@return ImGuiContext?
 function ImGui.CreateContext(shared_font_atlas) end
 
 --
 -- NULL = destroy current context
 --
-function ImGui.DestroyContext() end
+---@param ctx? ImGuiContext
+function ImGui.DestroyContext(ctx) end
+
+---@return ImGuiContext?
+function ImGui.GetCurrentContext() end
+
+---@param ctx ImGuiContext
+function ImGui.SetCurrentContext(ctx) end
 
 --
 -- Main
@@ -1594,7 +1672,7 @@ function ImGui.GetVersion() end
 ---@param p_open true | nil
 ---@param flags? ImGui.WindowFlags | `ImGui.WindowFlags { "None" }`
 ---@return boolean
----@return boolean p_open
+---@return boolean | nil p_open
 function ImGui.Begin(name, p_open, flags) end
 
 function ImGui.End() end
@@ -3471,7 +3549,8 @@ function ImGui.MenuItemBoolPtr(label, shortcut, p_selected, enabled) end
 --
 -- Tooltips
 -- - Tooltips are windows following the mouse. They do not take focus away.
--- - A tooltip window can contain items of any types. SetTooltip() is a shortcut for the 'if (BeginTooltip()) { Text(...); EndTooltip(); }' idiom.
+-- - A tooltip window can contain items of any types.
+-- - SetTooltip() is more or less a shortcut for the 'if (BeginTooltip()) { Text(...); EndTooltip(); }' idiom (with a subtlety that it discard any previously submitted tooltip)
 --
 --
 -- begin/append a tooltip window.
@@ -3504,7 +3583,7 @@ function ImGui.SetTooltip(fmt, ...) end
 function ImGui.BeginItemTooltip() end
 
 --
--- set a text-only tooltip if preceeding item was hovered. override any previous call to SetTooltip().
+-- set a text-only tooltip if preceding item was hovered. override any previous call to SetTooltip().
 --
 ---@param fmt string
 ---@param ...  any
@@ -3537,7 +3616,7 @@ function ImGui.BeginPopup(str_id, flags) end
 ---@param p_open true | nil
 ---@param flags? ImGui.WindowFlags | `ImGui.WindowFlags { "None" }`
 ---@return boolean
----@return boolean p_open
+---@return boolean | nil p_open
 function ImGui.BeginPopupModal(name, p_open, flags) end
 
 --
@@ -3832,7 +3911,7 @@ function ImGui.EndTabBar() end
 ---@param p_open true | nil
 ---@param flags? ImGui.TabItemFlags | `ImGui.TabItemFlags { "None" }`
 ---@return boolean
----@return boolean p_open
+---@return boolean | nil p_open
 function ImGui.BeginTabItem(label, p_open, flags) end
 
 --
@@ -3862,7 +3941,7 @@ function ImGui.SetTabItemClosed(tab_or_docked_window_label) end
 -- - Drag from window menu button (upper-left button) to undock an entire node (all windows).
 -- - When io.ConfigDockingWithShift == true, you instead need to hold SHIFT to enable docking.
 -- About dockspaces:
--- - Use DockSpaceOverViewport() to create an explicit dock node covering the screen or a specific viewport.
+-- - Use DockSpaceOverViewport() to create a window covering the screen or a specific viewport + a dockspace inside it.
 --   This is often used with ImGuiDockNodeFlags_PassthruCentralNode to make it transparent.
 -- - Use DockSpace() to create an explicit dock node _within_ an existing window. See Docking demo for details.
 -- - Important: Dockspaces need to be submitted _before_ any window they can host. Submit it early in your frame!
@@ -3872,19 +3951,20 @@ function ImGui.SetTabItemClosed(tab_or_docked_window_label) end
 --
 -- Implied size = ImVec2(0, 0), flags = 0, window_class = NULL
 --
----@param id ImGuiID
+---@param dockspace_id ImGuiID
 ---@return ImGuiID
-function ImGui.DockSpace(id) end
+function ImGui.DockSpace(dockspace_id) end
 
----@param id ImGuiID
+---@param dockspace_id ImGuiID
 ---@param size_x? number | `0`
 ---@param size_y? number | `0`
 ---@param flags? ImGui.DockNodeFlags | `ImGui.DockNodeFlags { "None" }`
+---@param window_class? ImGuiWindowClass
 ---@return ImGuiID
-function ImGui.DockSpaceEx(id, size_x, size_y, flags) end
+function ImGui.DockSpaceEx(dockspace_id, size_x, size_y, flags, window_class) end
 
 --
--- Implied viewport = NULL, flags = 0, window_class = NULL
+-- Implied dockspace_id = 0, viewport = NULL, flags = 0, window_class = NULL
 --
 ---@return ImGuiID
 function ImGui.DockSpaceOverViewport() end
@@ -3895,6 +3975,12 @@ function ImGui.DockSpaceOverViewport() end
 ---@param dock_id ImGuiID
 ---@param cond? ImGui.Cond | `ImGui.Cond.None`
 function ImGui.SetNextWindowDockID(dock_id, cond) end
+
+--
+-- set next window class (control docking compatibility + provide hints to platform backend via custom viewport flags and platform parent/child relationship)
+--
+---@param window_class ImGuiWindowClass
+function ImGui.SetNextWindowClass(window_class) end
 
 ---@return ImGuiID
 function ImGui.GetWindowDockID() end
@@ -4282,6 +4368,32 @@ function ImGui.GetKeyName(key) end
 function ImGui.SetNextFrameWantCaptureKeyboard(want_capture_keyboard) end
 
 --
+-- Inputs Utilities: Shortcut Testing & Routing [BETA]
+-- - ImGuiKeyChord = a ImGuiKey + optional ImGuiMod_Alt/ImGuiMod_Ctrl/ImGuiMod_Shift/ImGuiMod_Super.
+--       ImGuiKey_C                          // Accepted by functions taking ImGuiKey or ImGuiKeyChord arguments)
+--       ImGuiMod_Ctrl | ImGuiKey_C          // Accepted by functions taking ImGuiKeyChord arguments)
+--   only ImGuiMod_XXX values are legal to combine with an ImGuiKey. You CANNOT combine two ImGuiKey values.
+-- - The general idea is that several callers may register interest in a shortcut, and only one owner gets it.
+--      Parent   -> call Shortcut(Ctrl+S)    // When Parent is focused, Parent gets the shortcut.
+--        Child1 -> call Shortcut(Ctrl+S)    // When Child1 is focused, Child1 gets the shortcut (Child1 overrides Parent shortcuts)
+--        Child2 -> no call                  // When Child2 is focused, Parent gets the shortcut.
+--   The whole system is order independent, so if Child1 makes its calls before Parent, results will be identical.
+--   This is an important property as it facilitate working with foreign code or larger codebase.
+-- - To understand the difference:
+--   - IsKeyChordPressed() compares mods and call IsKeyPressed() -> function has no side-effect.
+--   - Shortcut() submits a route, routes are resolved, if it currently can be routed it calls IsKeyChordPressed() -> function has (desirable) side-effects as it can prevents another call from getting the route.
+-- - Visualize registered routes in 'Metrics/Debugger->Inputs'.
+--
+---@param key_chord ImGuiKeyChord
+---@param flags? ImGui.InputFlags | `ImGui.InputFlags { "None" }`
+---@return boolean
+function ImGui.Shortcut(key_chord, flags) end
+
+---@param key_chord ImGuiKeyChord
+---@param flags? ImGui.InputFlags | `ImGui.InputFlags { "None" }`
+function ImGui.SetNextItemShortcut(key_chord, flags) end
+
+--
 -- Inputs Utilities: Mouse specific
 -- - To refer to a mouse button, you may use named enums in your code e.g. ImGuiMouseButton_Left, ImGuiMouseButton_Right.
 -- - You can also use regular integer: it is forever guaranteed that 0=Left, 1=Right, 2=Middle.
@@ -4372,7 +4484,7 @@ function ImGui.GetMousePos() end
 function ImGui.GetMousePosOnOpeningCurrentPopup() end
 
 --
--- is mouse dragging? (if lock_threshold < -1.0f, uses io.MouseDraggingThreshold)
+-- is mouse dragging? (uses io.MouseDraggingThreshold if lock_threshold < 0.0f)
 --
 ---@param button ImGui.MouseButton
 ---@param lock_threshold? number | `-1.0`
@@ -4380,7 +4492,7 @@ function ImGui.GetMousePosOnOpeningCurrentPopup() end
 function ImGui.IsMouseDragging(button, lock_threshold) end
 
 --
--- return the delta from the initial clicking position while the mouse button is pressed or was just released. This is locked and return 0.0f until the mouse moves past a distance threshold at least once (if lock_threshold < -1.0f, uses io.MouseDraggingThreshold)
+-- return the delta from the initial clicking position while the mouse button is pressed or was just released. This is locked and return 0.0f until the mouse moves past a distance threshold at least once (uses io.MouseDraggingThreshold if lock_threshold < 0.0f)
 --
 ---@param button? ImGui.MouseButton | `ImGui.MouseButton.Left`
 ---@param lock_threshold? number | `-1.0`
@@ -4468,10 +4580,29 @@ function ImGui.UpdatePlatformWindows() end
 function ImGui.RenderPlatformWindowsDefault() end
 
 --
+-- call in main loop. will call RenderWindow/SwapBuffers platform functions for each secondary viewport which doesn't have the ImGuiViewportFlags_Minimized flag set. May be reimplemented by user for custom rendering needs.
+--
+---@param platform_render_arg lightuserdata?
+---@param renderer_render_arg lightuserdata?
+function ImGui.RenderPlatformWindowsDefaultEx(platform_render_arg, renderer_render_arg) end
+
+--
+-- call DestroyWindow platform functions for all viewports. call from backend Shutdown() if you need to close platform windows before imgui shutdown. otherwise will be called by DestroyContext().
+--
+function ImGui.DestroyPlatformWindows() end
+
+--
 -- this is a helper for backends.
 --
 ---@param id ImGuiID
 ---@return ImGuiViewport
 function ImGui.FindViewportByID(id) end
+
+--
+-- this is a helper for backends. the type platform_handle is decided by the backend (e.g. HWND, MyWindow*, GLFWwindow* etc.)
+--
+---@param platform_handle lightuserdata
+---@return ImGuiViewport
+function ImGui.FindViewportByPlatformHandle(platform_handle) end
 
 return ImGui

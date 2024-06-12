@@ -42,14 +42,20 @@ local function run(setting, commands, input, output)
     end
     compiling[pathkey] = {}
 
-    if lfs.exists(path / "bin") then
-        local deps = depends.read_if_not_dirty(setting.vfs, path / ".dep")
-        if deps then
-            clonefile(path / "bin", output)
-            return compile_finish(pathkey, true, deps)
+    if lfs.exists(path) then
+        if lfs.exists(path / "bin") and lfs.exists(path / ".dep")  then
+            local deps, dirty_path = depends.read_if_not_dirty(setting.vfs, path / ".dep")
+            if deps then
+                clonefile(path / "bin", output)
+                return compile_finish(pathkey, true, deps)
+            elseif dirty_path then
+                log.warn(("`%s` is dirty. reason: `%s`"):format(path, dirty_path))
+            else
+                log.error(("`%s/.dep` does not exist."):format(path))
+            end
         end
+        lfs.remove_all(path)
     end
-    lfs.remove_all(path)
     lfs.create_directories(path)
     local C = {
         SHADERC:string(),
@@ -58,9 +64,9 @@ local function run(setting, commands, input, output)
         "--depends",
     }
     print "shader compile:"
-    local success, errmsg = subprocess.spawn(C)
+    local success, errmsg, outmsg = subprocess.spawn(C)
     if success then
-        local INFO = errmsg:upper()
+        local INFO = outmsg:upper()
         for _, term in ipairs {
             "ERROR",
             "FAILED TO BUILD SHADER"

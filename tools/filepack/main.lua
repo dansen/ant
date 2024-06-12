@@ -1,13 +1,29 @@
 local ltask = require "ltask"
 local fs = require "bee.filesystem"
+local sys = require "bee.sys"
 local platform = require "bee.platform"
 local zip = require "zip"
 local vfsrepo = import_package "ant.vfs"
 local cr = import_package "ant.compile_resource"
 
-local arg = ...
+local function command(args)
+	local result = {}
+	local n = 1
+	for _, arg in ipairs(args) do
+		if arg:sub(1,1) == "-" then
+			result[arg:sub(2)] = true
+		else
+			result[n] = arg; n = n + 1
+		end
+	end
+	return result
+end
+
+local arg = command(...)
+
 local path = arg[1]
 local config_os = arg[2]
+local VERBOSE = arg.v and print or function() end
 
 config_os = config_os or platform.os
 
@@ -74,6 +90,7 @@ end
 local writer = {}
 
 function writer.zip(bundlepath)
+	VERBOSE ("Bundlepath:", bundlepath)
     local zippath = bundlepath / "00.zip"
     local hashpath = bundlepath / "00.hash"
     local m = {}
@@ -166,24 +183,13 @@ do print "step4. pack file and dir."
         rootpath = repopath,
         resource_settings = config_resource,
     }
-    local function app_path(name)
-        if config_os == "windows" then
-            return fs.path(os.getenv "LOCALAPPDATA") / name
-        elseif config_os == "linux" then
-            return fs.path(os.getenv "XDG_DATA_HOME" or (os.getenv "HOME" .. "/.local/share")) / name
-        elseif config_os == "macos" then
-            return fs.path(os.getenv "HOME" .. "/Library/Caches") / name
-        else
-            error "unknown os"
-        end
-    end
     local function bundle_path()
         if config_os == "ios" then
             return repopath / ".ios"
         elseif config_os == "android" then
             return repopath / ".android"
         else
-            return app_path "ant" / "bundle"
+            return sys.exe_path():parent_path() / "internal"
         end
     end
     local w = writer.zip(bundle_path())
@@ -192,6 +198,7 @@ do print "step4. pack file and dir."
         if v.dir then
             w.writefile(hash, v.dir)
         else
+			VERBOSE(v.path, hash)
             w.copyfile(hash, v.path)
         end
     end

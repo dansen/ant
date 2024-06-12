@@ -1,6 +1,6 @@
 local lm = require "luamake"
 
-lm:required_version "1.9"
+lm:required_version "1.11"
 --lm.luaversion = "lua55"
 
 local plat = (function ()
@@ -129,17 +129,13 @@ if lm.os ~= "ios" and lm.os ~= "android" then
     }
     lm:phony "all" {
         deps = {
-            "editor",
-            "runtime",
+            "ant",
             "tools",
         }
     }
-    lm:default {
-        "editor",
-        lm.compiler == "msvc" and lm.sanitize and "copy_asan",
-    }
-else
-    lm:default {
-        "runtime",
-    }
 end
+
+lm:default {
+    "ant",
+    lm.compiler == "msvc" and lm.sanitize and "copy_asan",
+}

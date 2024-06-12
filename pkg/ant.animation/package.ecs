@@ -6,7 +6,6 @@ pipeline "animation"
     .stage "animation_sample"
 
 policy "animation"
-    .include_policy "ant.scene|scene_object"
     .component "animation"
 
 policy "skinning"
@@ -24,7 +23,7 @@ component "animation_playback"
 component "slot".type "lua"
 
 system "animation_system"
-    .implement "animation.lua"
+    .implement "animation_system.lua"
 
 system "playback_system"
     .implement "playback.lua"

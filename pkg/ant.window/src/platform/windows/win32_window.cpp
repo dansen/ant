@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <vector>
 #include <memory>
-#include <bee/platform/win/wtf8.h>
+#include <bee/win/wtf8.h>
 #include <bee/nonstd/unreachable.h>
 #include "../../window.h"
 
@@ -40,7 +40,7 @@ struct DropManager : public IDropTarget {
 				wlen++;
 				std::unique_ptr<wchar_t[]> wstr(new wchar_t[wlen]);
 				::DragQueryFileW(hdrop, i, wstr.get(), wlen);
-				m_files.push_back(bee::wtf8::w2u({ wstr.get(), (size_t)wlen }));
+				m_files.push_back(bee::wtf8::w2u({ wstr.get(), (size_t)(wlen-1) }));
 			}
 			ReleaseStgMedium(&stgm);
 		}
@@ -73,10 +73,14 @@ struct DropManager : public IDropTarget {
 
 struct WindowData {
 	HWND             hWnd = NULL;
+	LONG             Styles = 0;
+	WINDOWPLACEMENT  WindowPlacement;
 	ImGuiMouseCursor MouseCursor = ImGuiMouseCursor_Arrow;
+	bool             ShowCursor = true;
 	UINT             KeyboardCodePage = 0;
 	DropManager      DropManager;
 	bool             Minimized = false;
+	bool             Fullscreen = false;
 };
 static WindowData G;
 
@@ -296,7 +300,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)L);
 		RECT r;
 		GetClientRect(hWnd, &r);
-		window_message_init(L, hWnd, hWnd, 0, r.right-r.left, r.bottom-r.top);
+		window_message_init(L, hWnd, hWnd, NULL, NULL, r.right-r.left, r.bottom-r.top);
 		break;
 	}
 	case WM_DESTROY:
@@ -515,13 +519,22 @@ static RECT createWindowRect(const char *size) {
 	auto& monitor = monitors[0];
 	LONG work_w = monitor.rcWork.right - monitor.rcWork.left;
 	LONG work_h = monitor.rcWork.bottom - monitor.rcWork.top;
-	LONG window_w = (LONG)(work_w * 0.7f);
-	LONG window_h = (LONG)(window_w / 16.f * 9.f);
-	if (size) {
-		int w, h;
-		if (sscanf(size, "%dx%d", &w, &h) == 2) {
-			window_w = w;
-			window_h = h;
+	LONG window_w, window_h;
+
+	int w, h;
+	if (size && sscanf(size, "%dx%d", &w, &h) == 2) {
+		window_w = w;
+		window_h = h;
+	} else {
+		window_w = (LONG)(work_w * 0.7f);
+		window_h = (LONG)(work_h * 0.7f);
+		
+		// Set window to 16:9
+		
+		if (window_w * 9 > window_h * 16) {
+ 			window_w = window_h * 16 / 9;
+		} else {
+			window_h = window_w * 9 / 16;
 		}
 	}
 	RECT rect;
@@ -537,15 +550,20 @@ bool window_init(lua_State* L, const char *size) {
 	if (FAILED(OleInitialize(NULL))) {
 		return false;
 	}
+	HICON icon = ::LoadIcon(::GetModuleHandle(NULL), MAKEINTRESOURCE(101));
+	if (icon == NULL) {
+		icon = ::LoadIcon(NULL, IDI_APPLICATION);
+	}
 	WNDCLASSEXW wndclass;
 	memset(&wndclass, 0, sizeof(wndclass));
 	wndclass.cbSize = sizeof(wndclass);
 	wndclass.style = CS_HREDRAW | CS_VREDRAW;// | CS_OWNDC;
 	wndclass.lpfnWndProc = WndProc;
 	wndclass.hInstance = GetModuleHandleW(0);
-	wndclass.hIcon = LoadIconW(NULL, (LPCWSTR)IDI_APPLICATION);
+	wndclass.hIcon = icon;
 	wndclass.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
 	wndclass.lpszClassName = CLASSNAME;
+	wndclass.hIconSm = icon;
 	RegisterClassExW(&wndclass);
 
 	RECT rect = createWindowRect(size);
@@ -571,6 +589,9 @@ bool window_init(lua_State* L, const char *size) {
 void window_close() {
 	G.DropManager.Revoke();
 	UnregisterClassW(CLASSNAME, GetModuleHandleW(0));
+	if (!G.ShowCursor) {
+		::ShowCursor(TRUE);
+	}
 }
 
 bool window_peek_message() {
@@ -588,13 +609,65 @@ bool window_peek_message() {
 	}
 }
 
-void window_set_cursor(int cursor) {
+static void window_set_cursor(int cursor) {
 	G.MouseCursor = (ImGuiMouseCursor)cursor;
 }
 
-void window_set_title(bee::zstring_view title) {
+static void window_set_title(bee::zstring_view title) {
     ::SetWindowTextW(G.hWnd, bee::wtf8::u2w(title).c_str());
 }
 
-void window_set_maxfps(float fps) {
+static void window_show_cursor(bool show) {
+	if (G.ShowCursor != show) {
+		G.ShowCursor = show;
+		::ShowCursor(show ? TRUE : FALSE);
+	}
 }
+
+static void window_set_fullscreen(bool fullscreen) {
+	if (fullscreen) {
+		if (!G.Fullscreen) {
+			G.Styles = ::GetWindowLongW(G.hWnd, GWL_STYLE);
+			::GetWindowPlacement(G.hWnd, &G.WindowPlacement);
+		}
+	}
+
+	RECT fullrect = { 0 };
+	::SetRect(&fullrect, 0, 0, ::GetSystemMetrics(SM_CXSCREEN), ::GetSystemMetrics(SM_CYSCREEN));
+
+	WINDOWPLACEMENT newPlacement = G.WindowPlacement;
+	newPlacement.showCmd = SW_SHOWNORMAL;
+	newPlacement.rcNormalPosition = fullrect;
+
+	if (fullscreen) {
+		::SetWindowLongW(G.hWnd, GWL_STYLE, WS_VISIBLE);
+		::SetWindowPlacement(G.hWnd, &newPlacement);
+	}
+	else {
+		if (G.Fullscreen) {
+			::SetWindowLongW(G.hWnd, GWL_STYLE, G.Styles);
+			::SetWindowPlacement(G.hWnd, &G.WindowPlacement);
+		}
+	}
+	G.Fullscreen = fullscreen;
+}
+
+void ant::window::set_message(ant::window::set_msg& msg) {
+	switch (msg.type) {
+	case ant::window::set_msg::type::cursor:
+		window_set_cursor(msg.cursor);
+		break;
+	case ant::window::set_msg::type::title:
+		window_set_title(msg.title);
+		break;
+	case ant::window::set_msg::type::fullscreen:
+		window_set_fullscreen(msg.fullscreen);
+		break;
+	case ant::window::set_msg::type::show_cursor:
+		window_show_cursor(msg.show_cursor);
+		break;
+	default:
+		break;
+	}
+}
+

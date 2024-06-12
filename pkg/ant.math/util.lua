@@ -373,11 +373,6 @@ function util.ray_point(ray, t)
 	return math3d.muladd(ray.d, t, ray.o)
 end
 
-function util.ray_plane_point(ray, plane)
-	local t = math3d.plane_ray(ray.o, ray.d, plane)
-	return math3d.muladd(ray.d, t, ray.o)
-end
-
 function util.ray_triangle(ray, v0, v1, v2)
 	local success, t = math3d.triangle_ray(ray.o, ray.d, v0, v1, v2)
 	if success then
@@ -496,6 +491,22 @@ function util.from_cmat3(...)
     return math3d.constant("mat", util.from_mat3(...))
 end
 
+function util.check_nan(v)
+    return v ~= v and 0 or v
+end
+
+local HALF_UINT16<const> = 32767
+function util.h2f(h)
+	return h/HALF_UINT16
+end
+
+function util.f2h(f)
+	return math.floor(util.check_nan(f)*HALF_UINT16 + 0.5)
+end
+
+function util.H2B(H)
+	return math.floor(H/65535.0*255+0.5)
+end
 
 function util.clamp_vec(v, minv, maxv)
 	return math3d.max(minv, math3d.min(v, maxv))
@@ -516,18 +527,6 @@ end
 
 function util.saturate(v)
 	return util.clamp(v, 0.0, 1.0)
-end
-
-function util.convert_device_to_screen_coord(bvp, svr, x, y)
-    local bw, bh = bvp.w, bvp.h
-    local sw, sh = svr.w, svr.h
-    return x * (sw / bw), y * (sh / bh)
-end
-
-function util.convert_screen_to_device_coord(bvp, svr, x, y)
-    local bw, bh = bvp.w, bvp.h
-    local sw, sh = svr.w, svr.h
-    return x * (bw / sw), y * (bh / sh)
 end
 
 function util.aabb_minmax(aabb)

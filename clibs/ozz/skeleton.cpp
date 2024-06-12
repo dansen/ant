@@ -1,5 +1,5 @@
 #include <lua.hpp>
-#include <bee/lua/binding.h>
+#include <bee/lua/udata.h>
 
 #include "ozz.h"
 
@@ -140,7 +140,6 @@ void init_skeleton(lua_State* L) {
 namespace bee::lua {
 	template <>
 	struct udata<ozz::animation::Skeleton> {
-		static inline auto name = "ozz::Skeleton";
 		static inline auto metatable = ozzlua::Skeleton::metatable;
 	};
 }

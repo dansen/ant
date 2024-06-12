@@ -229,7 +229,7 @@ static id init_gesture() {
         w = h;
         h = tmp;
     }
-    window_message_init(g_peekL, (__bridge void*)self.layer, (__bridge void*)self.layer, (__bridge void*)g_device, w, h);
+    window_message_init(g_peekL, (__bridge void*)self.layer, (__bridge void*)self.layer, NULL, (__bridge void*)g_device, w, h);
     lua_callback("init");
 
     g_gesture = init_gesture();
@@ -386,17 +386,21 @@ bool window_peek_message() {
     return true;
 }
 
-void window_set_cursor(int cursor) {
-}
-
-void window_set_title(bee::zstring_view title) {
-}
-
-void window_set_maxfps(float fps) {
+static void window_set_maxfps(float fps) {
     //TODO
     //if (global_window) {
     //    [global_window maxfps: fps];
     //}
+}
+
+void ant::window::set_message(ant::window::set_msg& msg) {
+	switch (msg.type) {
+	case ant::window::set_msg::type::maxfps:
+		window_set_maxfps(msg.maxfps);
+		break;
+	default:
+		break;
+	}
 }
 
 static int lua_traceback(lua_State *L) {

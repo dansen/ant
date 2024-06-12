@@ -1,6 +1,8 @@
 Ant Game Engine
 =====
 
+[English Version](./README.en.md) | [中文版本](./README.md)
+
 Ant is an open source game engine developed by Lingxi Interactive Entertainment. At this stage, only the code repository is made public and has not yet been officially released. Documentation, examples, etc. are to be gradually improved on the [Wiki](https://github.com/ejoy/ant/wiki) If you have any questions, you can post in [Discussions](https://github.com/ejoy/ant/discussions). Issues are only used for bug tracking, please do not ask questions in them.
 
 ### Update and Initialize Third-party Libraries:
@@ -15,13 +17,6 @@ Ant is an open source game engine developed by Lingxi Interactive Entertainment.
 #### MINGW
 - Download and install [msys2](https://www.msys2.org/)
 - Find the msys2 installation directory and use mingw64.exe to open the msys2 terminal
-- Modify the mirror server in the msys2 terminal
-``` bash
-echo "Server = https://mirrors.tuna.tsinghua.edu.cn/msys2/mingw/i686/" > /etc/pacman.d/mirrorlist.mingw32
-echo "Server = https://mirrors.tuna.tsinghua.edu.cn/msys2/mingw/x86_64/" > /etc/pacman.d/mirrorlist.mingw64
-echo "Server = https://mirrors.tuna.tsinghua.edu.cn/msys2/msys/\$arch/" > /etc/pacman.d/mirrorlist.msys
-```
-
 - Add the path to ming64 to the environment variable
 ``` bash
 echo "export MINGW=/mingw64" >> ~/.bash_profile
@@ -70,13 +65,13 @@ luamake [target] -mode [debug/release] #-mode默认是debug
 ### Run
 Run a minimal example
 ``` bash
-bin/msvc/debug/lua.exe test/simple/main.lua
+bin/msvc/debug/ant.exe test/simple/main.lua
 ```
 
 ### Start Editor
 
 ```bash
-bin/msvc/debug/lua.exe tools/editor/main.lua [projectdir] #for example: test/simple
+bin/msvc/debug/ant.exe tools/editor/main.lua [projectdir] #for example: test/simple
 ```
 
 ### Debug
@@ -92,7 +87,10 @@ bin/msvc/debug/lua.exe tools/editor/main.lua [projectdir] #for example: test/sim
             "type": "lua",
             "request": "launch",
             "name": "Debug",
-            "luaexe": "${workspaceFolder}/bin/msvc/debug/lua.exe",
+            "luaexe": "${workspaceFolder}/bin/msvc/debug/ant.exe",
+            "luaVersion": "lua-latest",
+            "path": null,
+            "cpath": null,
             "console": "integratedTerminal",
             "stopOnEntry": true,
             "outputCapture": [],
